@@ -1,0 +1,2 @@
+tiles.png, characters.png, backgrounds.png: "Pixel Platformer" de Kenney (www.kenney.nl), CC0.
+dungeon.png: "Tiny Dungeon" de Kenney (www.kenney.nl), CC0.
