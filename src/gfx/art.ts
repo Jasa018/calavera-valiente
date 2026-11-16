@@ -1,5 +1,6 @@
 // Arte propio en píxeles: Osmo el esqueleto, el Rey Diablo, proyectiles y adornos.
 // Cada carácter es un píxel de la paleta; '.' es transparente.
+import { MONSTER_ART, MPAL } from './monsters';
 
 const PAL: Record<string, string> = {
   k: '#2b1f33', // contorno (parecido al de los sprites de Kenney)
@@ -300,6 +301,165 @@ const SKULL_MAP = [
   '..kkk..kkk..',
 ];
 
+const SEED = [
+  '..kkk...',
+  '.kLlLk..',
+  'kLlLLLk.',
+  'kLLLLLk.',
+  '.kLLLk..',
+  '..kkk...',
+];
+const ROCK = [
+  '..kkkk....',
+  '.kGGgGk...',
+  'kGgGGGGk..',
+  'kGGGGDGk..',
+  'kGGDGGGk..',
+  '.kGGGGk...',
+  '..kkkk....',
+];
+const STINGER = [
+  '.....kk.',
+  '..kkkSSk',
+  'kkSSSSk.',
+  '..kkkSSk',
+  '.....kk.',
+];
+const BOLT = [
+  '...kk.',
+  '..kfk.',
+  '.kfk..',
+  'kffkk.',
+  '.kkfk.',
+  '..kfk.',
+  '.kfk..',
+  '.kk...',
+];
+const SPIKE = [
+  '.....k......',
+  '....kgk.....',
+  '....kgk..k..',
+  '...kgGk.kgk.',
+  '..kgGGkkgGk.',
+  '..kgGGGkgGGk',
+  '.kgGGGGkgGGk',
+  'kGGGDGGGGDGk',
+  'kGDGGGDGGGGk',
+  'kkkkkkkkkkkk',
+];
+const ICICLE = [
+  'kkkkkkkk',
+  'kcccbbbk',
+  '.kccbbk.',
+  '.kccbbk.',
+  '..kcbk..',
+  '..kcbk..',
+  '...kk...',
+];
+const BULLET = [
+  '..kkkkk...',
+  '.kDDDDDkk.',
+  'kDGGGDDDDk',
+  'kDGDDDDDDk',
+  'kDDDDDDDDk',
+  '.kDDDDDkk.',
+  '..kkkkk...',
+];
+const FEATHER = [
+  '......kk',
+  '....kkpk',
+  '..kkppk.',
+  '.kpPpk..',
+  'kpPpk...',
+  'kPkk....',
+  'kk......',
+];
+const HOLY = [
+  '...kk...',
+  '..kfWk..',
+  'kkfWWfkk',
+  'kfWWWWfk',
+  'kkfWWfkk',
+  '..kfWk..',
+  '...kk...',
+];
+const KEY = [
+  '..kkkk..........',
+  '.kyyyyk.........',
+  'kyykkyyk........',
+  'kykk.kykkkkkkkk.',
+  'kykk.kyyyyyyyyyk',
+  'kyykkyykkkkykyk.',
+  '.kyyyyk....kkk..',
+  '..kkkk..........',
+];
+const CART = [
+  'kkkkkkkkkkkkkkkkkkkk',
+  'kGGgGGGGGGGGGGGGgGGk',
+  'kGDDDDDDDDDDDDDDDDGk',
+  'kGDGGGGGGGGGGGGGGDGk',
+  'kGDGGGGGGGGGGGGGGDGk',
+  'kGGGGGGGGGGGGGGGGGGk',
+  'kkkkkkkkkkkkkkkkkkkk',
+  '..kkkk........kkkk..',
+  '.kDGGDk......kDGGDk.',
+  '.kGDDGk......kGDDGk.',
+  '..kkkk........kkkk..',
+];
+const TOWER = [
+  '.k.k.k.k.k.k..',
+  '.kgkgkgkgkgk..',
+  '.kgggggggggk..',
+  '..kgggggggk...',
+  '..kgggRRggk...',
+  '..kggRRRRgk...',
+  '..kgggggggk...',
+  '..kgkkgggggk..',
+  '..kgkkgggggk..',
+  '..kgggggggk...',
+  '..kggggkkgk...',
+  '..kggggkkgk...',
+  '..kgggggggk...',
+  '.kggggkkgggk..',
+  '.kgggkRRkggk..',
+  '.kgggkRRkggk..',
+  '.kkkkkkkkkkk..',
+]
+const SECRET_NODE = [
+  '..kkkkkkkk..',
+  '.kppppppppk.',
+  'kppPPPPPPppk',
+  'kpPkkkkkkPpk',
+  'kpPkfffkkPpk',
+  'kpPPPPkfkPpk',
+  'kpPPPkfkPPpk',
+  'kpPPPkfkPPpk',
+  'kpPPPPPPPPpk',
+  'kpPPPkfkPPpk',
+  '.kppppppppk.',
+  '..kkkkkkkk..',
+];
+const HOUSE = [
+  '.....kk.....',
+  '....kRRk....',
+  '...kRRRRk...',
+  '..kRRRRRRk..',
+  '.kRRRRRRRRk.',
+  'kkkkkkkkkkkk',
+  '.kwwwwwwwwk.',
+  '.kwykwwkykk.',
+  '.kwkkwwkkwk.',
+  '.kwwwkkwwwk.',
+  '.kwwwkykwwk.',
+  '.kkkkkkkkkk.',
+];
+const PATH_DOT = [
+  '.kk.',
+  'kwwk',
+  'kwwk',
+  '.kk.',
+];
+
 export interface HeroFrames {
   idle: HTMLCanvasElement[];
   walk: HTMLCanvasElement[];
@@ -323,9 +483,34 @@ export interface Art {
   wave: HTMLCanvasElement;
   castle: HTMLCanvasElement;
   skullMap: HTMLCanvasElement;
+  seed: HTMLCanvasElement;
+  rock: HTMLCanvasElement;
+  stinger: HTMLCanvasElement;
+  bolt: HTMLCanvasElement;
+  spike: HTMLCanvasElement;
+  icicle: HTMLCanvasElement;
+  bullet: HTMLCanvasElement;
+  feather: HTMLCanvasElement;
+  holy: HTMLCanvasElement;
+  key: HTMLCanvasElement;
+  cart: HTMLCanvasElement;
+  tower: HTMLCanvasElement;
+  secretNode: HTMLCanvasElement;
+  house: HTMLCanvasElement;
+  dot: HTMLCanvasElement;
+  /** Monstruos dibujados a mano, por nombre. */
+  mons: Record<string, HTMLCanvasElement>;
 }
 
 let cache: Art | null = null;
+/** Dibujo propio por nombre (Rey Diablo o monstruos). */
+export function artFrame(name: string): HTMLCanvasElement {
+  const a = art();
+  if (name === 'rey1') return a.rey1;
+  if (name === 'rey2') return a.rey2;
+  return a.mons[name];
+}
+
 export function art(): Art {
   if (cache) return cache;
   cache = {
@@ -349,6 +534,22 @@ export function art(): Art {
     wave: pix(WAVE),
     castle: pix(CASTLE),
     skullMap: pix(SKULL_MAP),
+    seed: pix(SEED, { ...PAL, ...MPAL }),
+    rock: pix(ROCK, { ...PAL, ...MPAL }),
+    stinger: pix(STINGER, { ...PAL, ...MPAL }),
+    bolt: pix(BOLT, { ...PAL, ...MPAL }),
+    spike: pix(SPIKE, { ...PAL, ...MPAL }),
+    icicle: pix(ICICLE),
+    bullet: pix(BULLET, { ...PAL, ...MPAL }),
+    feather: pix(FEATHER, { ...PAL, ...MPAL }),
+    holy: pix(HOLY, { ...PAL, ...MPAL }),
+    key: pix(KEY),
+    cart: pix(CART, { ...PAL, ...MPAL }),
+    tower: pix(TOWER),
+    secretNode: pix(SECRET_NODE, { ...PAL, ...MPAL }),
+    house: pix(HOUSE),
+    dot: pix(PATH_DOT),
+    mons: Object.fromEntries(Object.entries(MONSTER_ART).map(([k, v]) => [k, pix(v, MPAL)])),
   };
   return cache;
 }

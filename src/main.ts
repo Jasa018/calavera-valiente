@@ -1,10 +1,12 @@
 // Calavera Valiente: une la lógica, el dibujo y los menús.
 import './style.css';
 import { FINAL_LEVEL, LEVELS, WORLDS } from './data/worlds';
-import { deleteSave, loadSave, newSave, writeSave, type Save } from './game/progress';
+import { ITEMS } from './data/items';
+import { deleteSave, giveGear, loadSave, newSave, writeSave, type Save } from './game/progress';
 import { Stage } from './game/stage';
 import { VIEW_H, VIEW_W } from './game/types';
 import { WorldMap } from './game/worldmap';
+import { art } from './gfx/art';
 import { drawMap, drawTitle } from './gfx/maprender';
 import { FONT, StageView } from './gfx/render';
 import { loadSheets, type Sheets } from './gfx/sheets';
@@ -42,7 +44,7 @@ resize();
 async function titleFlow() {
   mode = 'title';
   stage = null;
-  playMusic('mapa');
+  playMusic('titulo');
   busy = true;
   const existing = loadSave();
   const choice = await titleMenu(!!existing);
@@ -72,7 +74,7 @@ function startStage(levelId: string, opts: ConstructorParameters<typeof Stage>[2
   if (opts.fromCheckpoint) view.intro = 0;
   mode = 'stage';
   busy = false;
-  playMusic(stage.world.theme);
+  playMusic(stage.def.music);
   clearInput();
   (window as unknown as Record<string, unknown>).__stage = stage;
 }
@@ -82,7 +84,7 @@ async function mapInteract() {
   const n = wm.node;
   const w = wm.world;
   busy = true;
-  if ((n.kind === 'nivel' || n.kind === 'castillo') && n.level) {
+  if (n.level) {
     sfx('select');
     startStage(n.level);
     return;
@@ -101,6 +103,16 @@ async function mapInteract() {
     sfx('select');
     writeSave(save);
     toast(`Mundo ${wm.worldIndex + 1}: ${WORLDS[wm.worldIndex].name}`);
+  } else if (n.kind === 'cofre') {
+    if (save.opened.includes(n.id)) await message(['El cofre está vacío.'], n.label);
+    else {
+      save.opened.push(n.id);
+      const it = ITEMS[n.item!];
+      giveGear(save, it.id);
+      sfx('levelup');
+      await message([`Dentro hay: ${it.name}.`, it.desc, 'Puedes cambiarte el equipo desde el menú (Esc).'], '¡Tesoro!');
+      writeSave(save);
+    }
   } else if (n.kind === 'inicio') {
     await message(['El osario donde despertaste. Huele a tierra húmeda y a nostalgia.'], w.name);
   }
@@ -112,6 +124,7 @@ async function finishStage(st: Stage) {
   busy = true;
   const first = !save.cleared.includes(st.def.id);
   if (first) save.cleared.push(st.def.id);
+  if (st.exit === 's' && !save.secrets.includes(st.def.id)) save.secrets.push(st.def.id);
   writeSave(save);
   await clearScreen(st);
   if (st.def.id === FINAL_LEVEL) {
@@ -239,6 +252,7 @@ async function boot() {
   // Para depurar desde la consola
   const w = window as unknown as Record<string, unknown>;
   w.__save = () => save;
+  w.__sprites = () => Object.entries(art().mons).map(([k, cv]) => [k, cv.toDataURL()]);
   w.__play = (id: string) => {
     if (!LEVELS[id]) return 'Niveles: ' + Object.keys(LEVELS).join(', ');
     if (!wm) wm = WorldMap.fromSave(save);

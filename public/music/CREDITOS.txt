@@ -1,0 +1,10 @@
+Música: Juhani Junkala (SubspaceAudio), licencia CC0 (dominio público).
+https://creativecommons.org/publicdomain/zero/1.0/
+
+- titulo.mp3, aventura1-3.mp3, final.mp3: «5 Chiptunes (Action)»
+  https://opengameart.org/content/5-chiptunes-action
+- mapa.mp3, etapa1-2.mp3, jefe.mp3: «4 Chiptunes (Adventure)»
+  https://opengameart.org/content/4-chiptunes-adventure
+
+Texto del autor: «These music tracks have been released under CC0 creative commons license.
+You can do anything you want with these tunes.»

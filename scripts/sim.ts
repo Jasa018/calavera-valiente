@@ -3,13 +3,15 @@
 import { CHUNKS } from '../src/data/chunks';
 import { ITEMS } from '../src/data/items';
 import { MONSTERS } from '../src/data/monsters';
-import { SKILL } from '../src/data/skills';
+import { SKILLS } from '../src/data/skills';
 import { LEVELS, WORLDS } from '../src/data/worlds';
-import { buildLevel } from '../src/game/level';
+import { expectedLevel, tierStats } from '../src/game/formulas';
+import { buildLevel, chunkList } from '../src/game/level';
 import { baseStats, newSave, stats, xpToNext } from '../src/game/progress';
 import { PHYS, Stage } from '../src/game/stage';
-import { NO_INPUT, ROWS, TILE } from '../src/game/types';
+import { NO_INPUT, TILE } from '../src/game/types';
 
+const quick = process.argv.includes('--rapido');
 let errors = 0;
 const fail = (m: string) => {
   errors++;
@@ -35,115 +37,179 @@ console.log(`  doble salto: +${D.rise.toFixed(0)} px · resorte: ${(S.rise / TIL
 
 // ── 2. Datos ──
 console.log('Datos');
+const SOLIDS = '#XB?QUIOALREF';
 for (const [name, ch] of Object.entries(CHUNKS)) {
-  if (ch.rows.length !== ROWS) fail(`tramo ${name}: ${ch.rows.length} filas`);
   const w = ch.rows[0].length;
   ch.rows.forEach((r, y) => r.length !== w && fail(`tramo ${name} fila ${y}: ancho ${r.length} ≠ ${w}`));
+  if (ch.tags === 'T') {
+    if (w !== 26) fail(`tramo de torre ${name}: ancho ${w}`);
+    continue;
+  }
+  if (ch.rows.length !== 15) fail(`tramo ${name}: ${ch.rows.length} filas`);
+  if (name.startsWith('sala_') || name === 'arena' || name === 'trono') continue;
   for (const x of [0, w - 1]) {
     if (ch.rows[13][x] !== '#' || ch.rows[14][x] !== '#') fail(`tramo ${name}: la columna ${x} no tiene suelo`);
-    for (let y = 0; y < 13; y++) if (!'.dPW'.includes(ch.rows[y][x]) && !(name === 'techo' && y < 2) && ch.rows[y][x] !== 'X') fail(`tramo ${name}: borde ${x},${y} = ${ch.rows[y][x]}`);
+    for (let y = 9; y < 13; y++) if (SOLIDS.includes(ch.rows[y][x])) fail(`tramo ${name}: borde ${x},${y} = ${ch.rows[y][x]}`);
   }
 }
-for (const w of WORLDS) for (const k of Object.values(w.roster)) if (!MONSTERS[k]) fail(`monstruo desconocido ${k}`);
-for (const w of WORLDS) for (const it of w.shop) if (!ITEMS[it]) fail(`objeto desconocido ${it}`);
-for (const w of WORLDS) for (const l of w.levels) if (l.boss && !MONSTERS[l.boss]) fail(`jefe desconocido ${l.boss}`);
 for (const w of WORLDS) {
-  const ids = new Set(w.nodes.map((n) => n.id));
-  for (const [a, b] of w.edges) {
-    if (!ids.has(a) || !ids.has(b)) fail(`arista con nodo desconocido ${a}-${b}`);
-    const na = w.nodes.find((n) => n.id === a)!, nb = w.nodes.find((n) => n.id === b)!;
-    if (na && nb && na.x !== nb.x && na.y !== nb.y) fail(`arista ${a}-${b} no es recta`);
+  for (const l of w.levels) {
+    for (const k of Object.values(l.roster)) if (!MONSTERS[k]) fail(`${l.id}: monstruo desconocido ${k}`);
+    if (l.boss && !MONSTERS[l.boss]?.boss) fail(`${l.id}: jefe desconocido ${l.boss}`);
   }
-  for (const n of w.nodes) if (n.level && !LEVELS[n.level]) fail(`nodo ${n.id}: nivel ${n.level} no existe`);
+  for (const it of w.shop) if (!ITEMS[it]) fail(`objeto desconocido ${it}`);
+  const ids = new Set(w.nodes.map((n) => n.id));
+  for (const e of w.edges) {
+    if (!ids.has(e.a) || !ids.has(e.b)) fail(`arista con nodo desconocido ${e.a}-${e.b}`);
+    const na = w.nodes.find((n) => n.id === e.a), nb = w.nodes.find((n) => n.id === e.b);
+    if (na && nb && na.x !== nb.x && na.y !== nb.y) fail(`arista ${e.a}-${e.b} no es recta`);
+    if (e.by && !LEVELS[e.by]) fail(`arista ${e.a}-${e.b}: nivel ${e.by} no existe`);
+  }
+  for (const n of w.nodes) {
+    if (n.level && !LEVELS[n.level]) fail(`nodo ${n.id}: nivel ${n.level} no existe`);
+    if (n.item && !ITEMS[n.item]?.treasure) fail(`nodo ${n.id}: tesoro ${n.item} no existe`);
+    if (n.x < 0 || n.x > 25 || n.y < 0 || n.y > 11) fail(`nodo ${n.id} fuera del mapa (${n.x},${n.y})`);
+  }
+  // Dos nodos en la misma casilla
+  const seen = new Set<string>();
+  for (const n of w.nodes) {
+    const k = `${n.x},${n.y}`;
+    if (seen.has(k)) fail(`${w.name}: dos nodos en ${k}`);
+    seen.add(k);
+  }
+}
+for (const m of Object.values(MONSTERS)) {
+  if (m.sprite.sheet === 'art') continue;
+  if (m.boss?.minion && !MONSTERS[m.boss.minion]) fail(`${m.id}: secuaz desconocido ${m.boss.minion}`);
 }
 
 // ── 3. Niveles alcanzables (búsqueda por casillas con el alcance del salto) ──
 console.log('Niveles');
+type Goal = 'G' | 'H';
 function reachable(levelId: string, double: boolean) {
   const info = LEVELS[levelId];
-  const lv = buildLevel(info.def, WORLDS[info.world]);
-  const W = lv.w;
+  const def = info.def;
+  const lv = buildLevel(def);
+  const W = lv.w, H = lv.h;
   const g = lv.grid.map((r) => [...r]);
   // Plataformas móviles: todo su recorrido cuenta como tablón
   for (const s of lv.spawns) {
-    if (s.kind === 'platX') for (let x = s.tx; x < s.tx + 8; x++) g[s.ty][x] = '-';
-    if (s.kind === 'platY') for (let y = s.ty - 4; y <= s.ty; y++) for (let x = s.tx; x < s.tx + 3; x++) g[y][x] = '-';
+    if (s.kind === 'platX') for (let x = s.tx; x < s.tx + 8; x++) if (g[s.ty][x] === '.') g[s.ty][x] = '-';
+    if (s.kind === 'platY') for (let y = s.ty - 4; y <= s.ty; y++) for (let x = s.tx; x < s.tx + 3; x++) if (g[y][x] === '.') g[y][x] = '-';
   }
-  const t = (x: number, y: number) => (x < 0 || x >= W ? 'X' : y < 0 ? '.' : y >= ROWS ? '~' : g[y][x]);
-  const solid = (c: string) => '#XB?QU'.includes(c);
-  const free = (x: number, y: number) => !solid(t(x, y));
-  const stand = (x: number, y: number) => {
+  const t = (x: number, y: number) => (x < 0 || x >= W ? 'X' : y < 0 ? 'X' : y >= H ? '~' : g[y][x]);
+  // Ladrillos y muros agrietados: se puede estar encima, y también romperlos para pasar
+  const solid = (c: string, sw: number, key: number) =>
+    '#X?QUIOA'.includes(c) || (c === 'L' && !key) || (c === 'E' && !sw) || (c === 'F' && !!sw);
+  const floorOk = (c: string, sw: number, key: number) => solid(c, sw, key) || c === 'B' || c === 'R';
+  const oneWay = (c: string) => '-=CvV'.includes(c);
+  const free = (x: number, y: number, sw: number, k: number) => !solid(t(x, y), sw, k);
+  const stand = (x: number, y: number, sw: number, k: number) => {
     const below = t(x, y + 1);
-    return free(x, y) && free(x, y - 1) && (solid(below) || below === '-') && t(x, y) !== '^' && t(x, y) !== '~';
+    const here = t(x, y);
+    return free(x, y, sw, k) && free(x, y - 1, sw, k) && (floorOk(below, sw, k) || oneWay(below)) && here !== '^' && here !== '~';
   };
-  const clearCells = (cells: [number, number][]) => cells.every(([x, y]) => free(x, y) && free(x, y - 1));
-  const path = (x: number, y: number, x2: number, y2: number, top: number) => {
+  const clearCells = (cells: [number, number][], sw: number, k: number) => cells.every(([x, y]) => free(x, y, sw, k) && free(x, y - 1, sw, k));
+  const path = (x: number, y: number, x2: number, y2: number, top: number, sw: number, k: number) => {
     const cells: [number, number][] = [];
     for (let yy = y; yy >= top; yy--) cells.push([x, yy]);
     for (let xx = Math.min(x, x2); xx <= Math.max(x, x2); xx++) cells.push([xx, top]);
     for (let yy = top; yy <= y2; yy++) cells.push([x2, yy]);
-    return clearCells(cells);
+    return clearCells(cells, sw, k);
   };
   const maxRise = double ? 6 : 4;
   const reach = (dy: number) => {
-    // dy > 0 sube; dy < 0 baja
     if (double) return dy >= 6 ? 3 : dy >= 5 ? 4 : dy >= 3 ? 5 : dy >= 0 ? 7 : 7 + Math.floor(-dy / 2);
     return dy >= 4 ? 3 : dy >= 3 ? 4 : dy >= 0 ? 5 : 5 + Math.floor(-dy / 2);
   };
-  const start: [number, number] = [lv.start.tx, lv.start.ty];
-  const seen = new Set<string>([start.join(',')]);
-  const queue: [number, number][] = [start];
-  let goal = false;
-  let maxX = 0;
+  const start: [number, number, number, number] = [lv.start.tx, lv.start.ty, 0, 0];
+  const id = (s: number[]) => s.join(',');
+  const seen = new Set<string>([id(start)]);
+  const queue: [number, number, number, number][] = [start];
+  const found = new Set<Goal>();
+  let maxX = 0, minY = H;
+  const mainW = lv.regions[0].x1;
+  const push = (s: [number, number, number, number]) => {
+    const k = id(s);
+    if (seen.has(k)) return;
+    seen.add(k);
+    queue.push(s);
+  };
   while (queue.length) {
-    const [x, y] = queue.shift()!;
-    maxX = Math.max(maxX, x);
-    if (t(x, y) === 'G' || (lv.arena && x >= lv.arena.x0 + 4)) goal = true;
+    const [x, y, sw, key] = queue.shift()!;
+    if (x < mainW) maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    for (const yy of [y, y - 1]) {
+      if (t(x, yy) === 'G') found.add('G');
+      if (t(x, yy) === 'H') found.add('H');
+    }
+    if (lv.arena && x >= lv.arena.x0 + 4) found.add('G');
+    // Llave al alcance (encima de la cabeza)
+    let k2 = key;
+    for (let yy = y; yy >= y - 3; yy--) if (t(x, yy) === 'k') k2 = 1;
+    if (k2 !== key) push([x, y, sw, k2]);
+    // Palanca al lado
+    for (let xx = x - 1; xx <= x + 1; xx++) for (const yy of [y, y - 1]) if (t(xx, yy) === 'l') push([x, y, sw ? 0 : 1, key]);
+    // Puerta
+    const door = lv.doors.get(`${x},${y}`);
+    if (door) push([door.tx, door.ty, sw, key]);
+    if (def.water) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (ny < 1 || ny >= H) continue;
+        if (!free(nx, ny, sw, key) || !free(nx, ny - 1, sw, key)) continue;
+        const c = t(nx, ny);
+        if (c === '^' || c === '~') continue;
+        push([nx, ny, sw, key]);
+      }
+      continue;
+    }
     const spring = t(x, y) === 'S';
     const rise = spring ? 9 : maxRise;
     for (let dy = rise; dy >= -14; dy--) {
       const r = spring ? 3 : reach(dy);
       for (let dx = -r; dx <= r; dx++) {
         const nx = x + dx, ny = y - dy;
-        if (ny < 1 || ny >= ROWS || !stand(nx, ny)) continue;
-        const k = nx + ',' + ny;
-        if (seen.has(k)) continue;
+        if (ny < 1 || ny >= H || !stand(nx, ny, sw, key)) continue;
+        if (seen.has(id([nx, ny, sw, key]))) continue;
         const top = Math.min(y, ny) - (dy > 0 || dx !== 0 ? 1 : 0);
-        const ok = path(x, y, nx, ny, Math.max(1, top)) || (dy <= 0 && path(x, y, nx, ny, y));
+        const ok = path(x, y, nx, ny, Math.max(1, top), sw, key) || (dy <= 0 && path(x, y, nx, ny, y, sw, key));
         if (!ok) continue;
-        seen.add(k);
-        queue.push([nx, ny]);
+        push([nx, ny, sw, key]);
       }
     }
   }
-  return { goal, maxX, w: W, lv };
+  return { found, maxX, minY, w: mainW, h: H, lv };
 }
 
 for (const [wi, w] of WORLDS.entries()) {
   for (const l of w.levels) {
-    const lv = buildLevel(l, w);
+    const lv = buildLevel(l);
     const enemies = lv.spawns.filter((s) => s.kind === 'enemy');
     // Monstruos de suelo sobre suelo
     for (const s of enemies) {
       const def = MONSTERS[s.id];
-      if (def.behavior === 'flyer' || def.behavior === 'ghost') continue;
+      if (['flyer', 'ghost', 'swimmer', 'jelly', 'puffer', 'cloud', 'dropper', 'thwomp'].includes(def.behavior)) continue;
+      if (l.water && def.behavior !== 'walker' && def.behavior !== 'charger') continue;
       const below = lv.grid[s.ty + 1]?.[s.tx];
-      if (!below || !'#XB?QU-'.includes(below)) fail(`${l.id}: ${s.id} en ${s.tx},${s.ty} flota (debajo "${below}")`);
+      if (!below || !'#XB?QUI-=CvV'.includes(below)) fail(`${l.id}: ${s.id} en ${s.tx},${s.ty} flota (debajo "${below}")`);
     }
     if (!l.boss && !lv.grid.some((r) => r.includes('G'))) fail(`${l.id}: no tiene salida`);
+    if (l.secret && !lv.grid.some((r) => r.includes('H'))) fail(`${l.id}: no tiene salida secreta`);
     if (l.boss && !lv.arena) fail(`${l.id}: tiene jefe pero no sala`);
     const single = reachable(l.id, false);
     const dbl = reachable(l.id, true);
-    const needDouble = !single.goal;
-    const usesHard = l.chunks.some((c) => CHUNKS[c].hard);
-    if (!dbl.goal) fail(`${l.id}: no se llega a la salida ni con doble salto (llega hasta la columna ${dbl.maxX} de ${dbl.w})`);
-    else if (needDouble && wi === 0) fail(`${l.id}: el mundo 1 no debe exigir doble salto (sin él llega a la columna ${single.maxX} de ${single.w})`);
-    const coins = lv.grid.flat().filter((c) => c === 'o' || c === '?').length + lv.grid.flat().filter((c) => c === 'g').length * 10;
-    console.log(`  ${l.id.padEnd(4)} ${String(lv.w).padStart(3)} col · ${String(enemies.length).padStart(2)} monstruos · ~${coins} monedas${needDouble ? ' · exige doble salto' : ''}${usesHard && !needDouble ? ' (tramo difícil con atajo)' : ''}`);
+    const needDouble = !single.found.has('G');
+    if (!dbl.found.has('G')) fail(`${l.id}: no se llega a la salida ni con doble salto (llega a x=${dbl.maxX}/${dbl.w}, y=${dbl.minY}/${dbl.h}) [${chunkList(l).join(' ')}]`);
+    else if (needDouble && wi === 0 && l.slot !== 'S') fail(`${l.id}: el mundo 1 no debe exigir doble salto (sin él llega a x=${single.maxX}/${single.w}, y=${single.minY}) [${chunkList(l).join(' ')}]`);
+    if (l.secret && !dbl.found.has('H')) fail(`${l.id}: la salida secreta no se alcanza [${chunkList(l).join(' ')}]`);
+    const coins = lv.grid.flat().filter((c) => c === 'o' || c === '?' || c === 'i').length + lv.grid.flat().filter((c) => c === 'g').length * 10;
+    if (!quick)
+      console.log(`  ${l.id.padEnd(4)} ${l.type.padEnd(9)} ${String(lv.w).padStart(3)}×${String(lv.h).padEnd(3)} · ${String(enemies.length).padStart(2)} monstruos · ~${coins} monedas${needDouble ? ' · doble salto' : ''}${l.secret ? ' · secreta' : ''}`);
   }
 }
 
-// ── 4. Balance: experiencia acumulada y peleas ──
+// ── 4. Balance ──
 console.log('Balance (matando a todos una vez)');
 let xp = 0;
 let lvl = 1;
@@ -152,76 +218,157 @@ const levelAt = (total: number) => {
   while (rest >= xpToNext(l)) rest -= xpToNext(l++);
   return l;
 };
-const GEAR = [['femur', 'harapos'], ['hueso_afilado', 'tapa_ataud'], ['espada_oxidada', 'cota_huesos'], ['hacha_osaria', 'placas_hierro'], ['guadana', 'manto_liche']];
+const GEAR = [
+  ['femur', 'harapos'], ['hueso_afilado', 'tapa_ataud'], ['espada_oxidada', 'cota_huesos'], ['maza_tumba', 'escudo_lapida'],
+  ['hacha_osaria', 'placas_hierro'], ['lanza_coral', 'escamas'], ['espada_runica', 'manto_escarcha'], ['guadana', 'manto_liche'],
+];
+let coinsTotal = 0;
 for (const [wi, w] of WORLDS.entries()) {
   const startLvl = lvl;
   let gold = 0;
   for (const l of w.levels) {
-    const lv = buildLevel(l, w);
+    const lv = buildLevel(l);
+    const base = tierStats(l.tier);
     for (const s of lv.spawns) {
       if (s.kind === 'enemy' || s.kind === 'boss') {
-        xp += MONSTERS[s.id].xp;
-        gold += MONSTERS[s.id].gold;
+        const m = MONSTERS[s.id];
+        xp += Math.max(1, Math.round(base.xp * m.xp));
+        gold += Math.round(base.gold * m.gold);
       }
     }
-    gold += lv.grid.flat().filter((c) => c === 'o' || c === '?').length + lv.grid.flat().filter((c) => c === 'g').length * 10;
+    gold += lv.grid.flat().filter((c) => c === 'o' || c === '?' || c === 'i').length + lv.grid.flat().filter((c) => c === 'g').length * 10;
   }
+  coinsTotal += gold;
   lvl = levelAt(xp);
-  // Pelea típica al empezar el mundo, con el equipo de la tienda anterior
   const save = newSave();
   save.level = startLvl;
   [save.weapon, save.armor] = GEAR[wi];
   const st = stats(save);
-  const mons = Object.values(w.roster).map((id) => MONSTERS[id]);
-  const hits = mons.map((m) => Math.ceil(m.hp / Math.max(1, st.atk - m.def * 0.5)));
-  const taken = mons.map((m) => Math.max(1, Math.round(m.atk - st.def * 0.5)));
-  const boss = MONSTERS[w.levels[w.levels.length - 1].boss!];
+  const base = tierStats(wi);
+  const norm = { hp: Math.round(base.hp), atk: Math.round(base.atk), def: Math.round(base.def) };
+  const hits = Math.ceil(norm.hp / Math.max(1, st.atk - norm.def * 0.5));
+  const taken = Math.max(1, Math.round(norm.atk - st.def * 0.5));
+  const boss = MONSTERS[w.levels.find((l) => l.slot === '8')!.boss!];
+  const bt = tierStats(wi + 0.7);
   const endSave = { ...save, level: lvl, weapon: GEAR[wi + 1]?.[0] ?? 'guadana', armor: GEAR[wi + 1]?.[1] ?? 'manto_liche' };
   const est = stats(endSave);
-  const bossHits = Math.ceil(boss.hp / Math.max(1, est.atk - boss.def * 0.5));
-  const bossTaken = Math.max(1, Math.round(boss.atk - est.def * 0.5));
-  console.log(`  Mundo ${wi + 1}: nivel ${startLvl} → ${lvl} · ~${gold} monedas`);
-  console.log(`    al llegar (ATQ ${st.atk}, DEF ${st.def}, PV ${st.maxHp}): golpes para matar ${hits.join('/')} · daño recibido ${taken.join('/')} (${Math.floor(st.maxHp / Math.max(...taken))} golpes para caer)`);
+  const bossHits = Math.ceil((bt.hp * boss.hp) / Math.max(1, est.atk - bt.def * boss.def * 0.5));
+  const bossTaken = Math.max(1, Math.round(bt.atk * boss.atk - est.def * 0.5));
+  const prices = w.shop.map((id) => ITEMS[id].price).reduce((a, b) => a + b, 0);
+  console.log(`  Mundo ${wi + 1}: nivel ${startLvl} → ${lvl} (esperado ${expectedLevel(wi).toFixed(0)} → ${expectedLevel(wi + 1).toFixed(0)}) · ~${gold} monedas (tienda: ${prices})`);
+  console.log(`    al llegar (ATQ ${st.atk}, DEF ${st.def}, PV ${st.maxHp}): monstruo normal en ${hits} golpes · te quita ${taken} (${Math.floor(st.maxHp / taken)} golpes para caer)`);
   console.log(`    jefe ${boss.name}: ${bossHits} golpes con ATQ ${est.atk} · te quita ${bossTaken} de ${est.maxHp} PV`);
 }
-for (const k of Object.values(SKILL)) if (k.level > lvl) fail(`la habilidad ${k.name} (nivel ${k.level}) no se alcanza antes del final (nivel ${lvl})`);
-console.log(`  PV/ATQ/DEF a nivel 1, 8 y 16: ${[1, 8, 16].map((l) => Object.values(baseStats(l)).join('/')).join(' · ')}`);
+for (const k of SKILLS) if (k.level > lvl) fail(`la habilidad ${k.name} (nivel ${k.level}) no se alcanza antes del final (nivel ${lvl})`);
+console.log(`  PV/PM/ATQ/DEF a nivel 1, 10, 20 y 35: ${[1, 10, 20, 35].map((l) => Object.values(baseStats(l)).join('/')).join(' · ')}`);
 
 // ── 5. Prueba de humo: cada nivel con un piloto tonto, y cada jefe ──
 console.log('Prueba de humo');
 for (const id of Object.keys(LEVELS)) {
   const save = newSave();
-  save.level = 20;
+  save.level = 40;
   const st = new Stage(id, save, { seed: 7 });
   let maxX = 0;
   try {
-    for (let f = 0; f < 3600 && st.state === 'play'; f++) {
+    for (let f = 0; f < (quick ? 1200 : 3600) && st.state === 'play'; f++) {
       const jump = f % 50 < 20;
-      st.update({ ...NO_INPUT, right: true, jump, jumpP: f % 50 === 0, attackP: f % 20 === 0, throwP: f % 90 === 0 });
+      st.update({ ...NO_INPUT, right: true, jump, jumpP: f % 50 === 0, up: f % 50 < 20, upP: f % 97 === 0, attackP: f % 20 === 0, castP: f % 90 === 0, nextP: f % 400 === 0 });
       st.events.length = 0;
+      st.save.hp = 9999;
       maxX = Math.max(maxX, st.player.x);
     }
     // Jefe: se coloca al jugador en la sala
     if (st.lvl.arena && st.state === 'play') {
       st.player.x = (st.lvl.arena.x0 + 5) * TILE;
       st.player.y = 11 * TILE;
+      st.region = st.regionAt(st.player.x, st.player.y);
       st.player.inv = 0;
       let f = 0;
-      for (; f < 60 * 120 && st.state === 'play'; f++) {
+      // El piloto alterna los hechizos que le hacen daño al jefe
+      const spells = (['rayo', 'luz', 'hielo', 'fuego'] as const).filter((k) => !st.boss?.def.immune?.includes(k === 'luz' ? 'luz' : k));
+      for (; f < 60 * 180 && st.state === 'play'; f++) {
+        st.save.spell = spells[Math.floor(f / 40) % spells.length];
         const b = st.boss;
         const dir = b && !b.dead ? Math.sign(b.x + b.w / 2 - (st.player.x + 5)) : 0;
-        st.update({ ...NO_INPUT, left: dir < 0, right: dir > 0, attackP: f % 18 === 0, jump: f % 70 < 15, jumpP: f % 70 === 0 });
+        st.update({ ...NO_INPUT, left: dir < 0, right: dir > 0, attackP: f % 18 === 0, castP: f % 40 === 0, jump: f % 70 < 15, jumpP: f % 70 === 0 });
         st.events.length = 0;
         st.save.hp = 9999; // inmortal: solo se mide que el jefe se puede vencer
+        st.save.mp = 99;
       }
-      if (!st.bossDone) fail(`${id}: el piloto no vence al jefe en 2 minutos`);
-      else console.log(`  ${id}: jefe vencido por el piloto en ${(f / 60).toFixed(0)} s (nivel 20)`);
-    } else {
-      console.log(`  ${id}: ${st.state === 'clear' ? 'completado por el piloto' : `sin errores (avanzó hasta x=${Math.round(maxX / TILE)})`}`);
+      if (!st.bossDone) fail(`${id}: el piloto no vence al jefe en 3 minutos (le queda ${st.boss?.hp}/${st.boss?.maxHp})`);
+      else console.log(`  ${id}: jefe vencido por el piloto en ${(f / 60).toFixed(0)} s`);
+    } else if (!quick) {
+      console.log(`  ${id}: ${st.state === 'clear' ? `completado por el piloto (salida ${st.exit === 's' ? 'secreta' : 'normal'})` : `sin errores (avanzó hasta x=${Math.round(maxX / TILE)})`}`);
     }
   } catch (e) {
     fail(`${id}: excepción ${(e as Error).stack}`);
   }
+}
+
+// ── 6. Mecanismos: puertas, llaves, palancas, muros y salida secreta ──
+console.log('Mecanismos');
+{
+  const base = WORLDS[0].levels[1];
+  LEVELS.prueba = { def: { ...base, id: 'prueba', chunks: ['inicio', 'llave_puerta', 'cerradura', 'palanca1', 'muro1', 'secreto_muro', 'meta'] }, world: 0 };
+  const st = new Stage('prueba', newSave(), { seed: 3 });
+  const at = (name: string) => st.lvl.starts.find((q) => q.name === name)!.at;
+  const place = (tx: number, ty: number) => {
+    st.player.x = tx * TILE + 4;
+    st.player.y = (ty + 1) * TILE - st.player.h;
+    st.player.vx = st.player.vy = 0;
+    st.region = st.regionAt(st.player.x, st.player.y);
+    st.update(NO_INPUT);
+  };
+  const tick = (inp = {}, n = 1) => {
+    for (let i = 0; i < n; i++) {
+      st.update({ ...NO_INPUT, ...inp });
+      st.events.length = 0;
+      st.save.hp = 9999;
+    }
+  };
+  // Puerta a la sala de la llave
+  place(at('llave_puerta') + 9, 12);
+  tick({ upP: true });
+  if (st.region === st.lvl.regions[0]) fail('la puerta no lleva a la sala');
+  const key = st.grid.flatMap((r, y) => r.map((c, x) => [c, x, y] as const)).find(([c]) => c === 'k');
+  if (!key) fail('la sala de la llave no tiene llave');
+  else {
+    place(key[1], key[2] + 1);
+    tick({}, 2);
+    if (st.keys !== 1) fail(`no se recoge la llave (llaves: ${st.keys})`);
+  }
+  // Volver por la puerta y abrir la cerradura
+  const roomDoor = [...st.lvl.doors.keys()].map((k) => k.split(',').map(Number)).find(([x]) => x >= st.lvl.regions[0].x1)!;
+  place(roomDoor[0], roomDoor[1]);
+  tick({}, 30);
+  tick({ upP: true });
+  if (st.region !== st.lvl.regions[0]) fail('la puerta de la sala no vuelve al nivel');
+  place(at('cerradura') + 7, 12);
+  tick({ right: true }, 10);
+  if (st.tile(at('cerradura') + 8, 12) === 'L') fail('la cerradura no se abre con la llave');
+  // Palanca: el muro rojo desaparece
+  const wallX = at('palanca1') + 14;
+  if (!st.solidAt(wallX, 12)) fail('el muro rojo no empieza macizo');
+  place(at('palanca1') + 5, 12);
+  st.player.face = 1;
+  tick({ attackP: true }, 1);
+  tick({}, 14);
+  if (!st.switchOn || st.solidAt(wallX, 12)) fail('la palanca no abre el muro rojo');
+  // Muro agrietado: tres golpes
+  place(at('muro1') + 7, 12);
+  st.player.face = 1;
+  for (let i = 0; i < 3; i++) {
+    tick({ attackP: true }, 1);
+    tick({}, 17);
+  }
+  if (st.tile(at('muro1') + 8, 12) === 'R') fail('el muro agrietado no se rompe con 3 golpes');
+  // Salida secreta
+  const h = at('secreto_muro') + 20;
+  place(h, 12);
+  tick({}, 2);
+  if (st.state !== 'clear' || st.exit !== 's') fail('la salida secreta no termina el nivel por la salida secreta');
+  if (!errors) console.log('  puertas, llave, cerradura, palanca, muro agrietado y salida secreta: bien');
+  delete LEVELS.prueba;
 }
 
 console.log(errors ? `\n${errors} errores` : '\nTodo bien');

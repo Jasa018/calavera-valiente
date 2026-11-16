@@ -6,7 +6,7 @@ const pressed = new Set<string>();
 
 const GAME_KEYS = new Set([
   'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Shift',
-  'a', 'd', 'w', 's', 'z', 'x', 'c', 'j', 'k', 'l', 'v', 'b', '1', '2',
+  'a', 'd', 'w', 's', 'z', 'x', 'c', 'j', 'k', 'l', 'v', 'b', 'q', 'e', '1', '2',
 ]);
 
 addEventListener('keydown', (e) => {
@@ -26,9 +26,11 @@ export function clearInput() {
   down.clear();
   pressed.clear();
   padPrev = [];
+  padUpPrev = false;
 }
 
 let padPrev: boolean[] = [];
+let padUpPrev = false;
 
 function pad() {
   const gp = navigator.getGamepads?.().find((g) => g && g.connected);
@@ -38,20 +40,25 @@ function pad() {
   const prev = padPrev;
   padPrev = b;
   const p = (i: number) => !!b[i] && !prev[i];
+  const up = ay < -0.5 || !!b[12];
+  const upP = up && !padUpPrev;
+  padUpPrev = up;
   return {
     left: ax < -0.4 || !!b[14],
     right: ax > 0.4 || !!b[15],
-    up: ay < -0.5 || !!b[12],
+    up,
+    upP,
     down: ay > 0.5 || !!b[13],
     jump: !!b[0],
     jumpP: p(0),
     attackP: p(2),
-    throwP: p(3),
-    dashP: p(1) || p(5),
-    healP: p(4),
-    rainP: p(7),
+    castP: p(3),
+    dashP: p(1),
+    prevP: p(4),
+    nextP: p(5),
     item1P: p(6),
-    item2P: false,
+    rainP: p(7),
+    healP: p(8),
     start: p(9),
   };
 }
@@ -65,11 +72,14 @@ export function readInput(): Input & { pause: boolean; esc: boolean; enter: bool
     left: has('ArrowLeft', 'a') || !!g?.left,
     right: has('ArrowRight', 'd') || !!g?.right,
     up: has('ArrowUp', 'w') || !!g?.up,
+    upP: tap('ArrowUp', 'w') || !!g?.upP,
     down: has('ArrowDown', 's') || !!g?.down,
     jump: has('z', ' ', 'ArrowUp', 'w') || !!g?.jump,
     jumpP: tap('z', ' ', 'ArrowUp', 'w') || !!g?.jumpP,
     attackP: tap('x', 'j') || !!g?.attackP,
-    throwP: tap('c', 'k') || !!g?.throwP,
+    castP: tap('c', 'k') || !!g?.castP,
+    nextP: tap('e') || !!g?.nextP,
+    prevP: tap('q') || !!g?.prevP,
     dashP: tap('Shift', 'l') || !!g?.dashP,
     healP: tap('v') || !!g?.healP,
     rainP: tap('b') || !!g?.rainP,

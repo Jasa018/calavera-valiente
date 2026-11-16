@@ -118,6 +118,18 @@ export function sfx(n: SoundName) {
     case 'buy': tone(1319, 0.06, 'square', 0.05); tone(1760, 0.12, 'square', 0.05, 0, 0.07); break;
     case 'nomp': tone(180, 0.15, 'square', 0.05); break;
     case 'splash': noise(0.3, 0.08); tone(400, 0.2, 'sine', 0.05, -300); break;
+    case 'key': [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.1, 'square', 0.05, 0, i * 0.06)); break;
+    case 'unlock': tone(300, 0.08, 'square', 0.06, -100); [523, 784].forEach((f, i) => tone(f, 0.15, 'square', 0.05, 0, 0.1 + i * 0.08)); break;
+    case 'lever': tone(220, 0.06, 'square', 0.06); tone(330, 0.1, 'square', 0.05, 0, 0.06); noise(0.05, 0.04); break;
+    case 'door': tone(160, 0.2, 'triangle', 0.07, -60); noise(0.12, 0.03); break;
+    case 'freeze': [1200, 1500, 1800].forEach((f, i) => tone(f, 0.08, 'triangle', 0.04, -200, i * 0.03)); break;
+    case 'thunder': noise(0.4, 0.12); tone(80, 0.35, 'sawtooth', 0.06, -30); break;
+    case 'swim': tone(500, 0.08, 'sine', 0.04, 200); break;
+    case 'crack': noise(0.06, 0.07); tone(140, 0.06, 'square', 0.05, -40); break;
+    case 'secret': [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.12, 'triangle', 0.05, 0, i * 0.07)); break;
+    case 'earth': noise(0.3, 0.1); tone(70, 0.3, 'square', 0.06, 30); break;
+    case 'holy': [784, 988, 1175, 1568, 1976].forEach((f, i) => tone(f, 0.25, 'sine', 0.04, 0, i * 0.03)); break;
+    case 'weak': noise(0.08, 0.1); tone(260, 0.1, 'square', 0.06, 200); break;
   }
 }
 
@@ -152,6 +164,39 @@ const SONGS: Record<string, Song> = {
     lead: 'A4 - C5 - D#5 - D5 - C5 - A4 - G#4 - A4 - - - E5 - D5 - C5 - B4 - G#4 - A4 - - - - - A4 C5 E5 - F5 E5 D#5 - E5 - C5 - B4 - G#4 - E4 - A4 - - - - - - -',
     bass: 'A2 A2 - A2 A2 - A2 - F2 F2 - F2 F2 - F2 - E2 E2 - E2 E2 - E2 - A2 A2 - A2 G#2 - E2 -',
   },
+  bosque: {
+    tempo: 120,
+    lead: 'E5 - B4 - E5 - F#5 G5 - F#5 - E5 - D5 - B4 - - - C5 - E5 - G5 - A5 B5 - A5 - G5 - F#5 - E5 - - - D5 - F#5 - A5 - B5 - A5 G5 F#5 - D5 - E5 - - - - - - -',
+    bass: 'E2 - B2 - E3 - B2 - C3 - G2 - C3 - G2 - D3 - A2 - D3 - A2 - E2 - B2 - E3 - B2 -',
+    wave: 'triangle',
+  },
+  mar: {
+    tempo: 104,
+    lead: 'C5 - - E5 G5 - - E5 A5 - - G5 E5 - - - F5 - - A5 C6 - - A5 G5 - - E5 D5 - - - C5 - - E5 G5 - - C6 B5 - - G5 A5 - - - G5 - - E5 D5 - - C5 E5 - - - - - - -',
+    bass: 'C3 - G2 - C3 - G2 - A2 - E2 - A2 - E2 - F2 - C3 - F2 - C3 - G2 - D3 - G2 - D3 -',
+    wave: 'sine',
+  },
+  cueva: {
+    tempo: 112,
+    lead: 'A4 - - C5 - - E5 - D5 - C5 - B4 - - - G4 - - B4 - - D5 - C5 - B4 - A4 - - - F4 - - A4 - - C5 - B4 - A4 - G#4 - - - A4 - - - - - - - - - - - - - - -',
+    bass: 'A2 - - A2 - - A2 - G2 - - G2 - - G2 - F2 - - F2 - - F2 - E2 - - E2 - E2 - -',
+    wave: 'triangle',
+  },
+  cielo: {
+    tempo: 156,
+    lead: 'G5 - B5 - D6 - B5 - C6 - A5 - F#5 - D5 - G5 - B5 - D6 - E6 - D6 C6 B5 - A5 - G5 - - - E5 - G5 - C6 - B5 - A5 - F#5 - D5 - F#5 - A5 - G5 - - - - - - -',
+    bass: 'G2 - D3 - G2 - D3 - C3 - G3 - C3 - G3 - A2 - E3 - A2 - E3 - D3 - A3 - D3 - A3 -',
+  },
+  carro: {
+    tempo: 200,
+    lead: 'E5 E5 - E5 G5 - E5 - D5 D5 - D5 F5 - D5 - C5 C5 - C5 E5 - C5 - B4 - D5 - G5 - - - E5 E5 - E5 A5 - G5 - F5 F5 - F5 A5 - F5 - E5 - D5 - C5 - B4 - C5 - - - - - - -',
+    bass: 'A2 A3 A2 A3 A2 A3 A2 A3 G2 G3 G2 G3 G2 G3 G2 G3 F2 F3 F2 F3 F2 F3 F2 F3 E2 E3 E2 E3 E2 E3 E2 E3',
+  },
+  torre: {
+    tempo: 144,
+    lead: 'D5 - F5 - A5 - D6 - C6 - A5 - F5 - G5 - A5 - - - E5 - G5 - A#5 - D6 - C6 - A#5 - G5 - A5 - - - F5 - A5 - C6 - F6 - E6 - D6 - C#6 - A5 - D6 - - - - - - -',
+    bass: 'D3 D3 - D3 A2 - A2 - A#2 A#2 - A#2 F2 - F2 - G2 G2 - G2 D3 - D3 - A2 A2 - A2 C#3 - E3 -',
+  },
   jefe: {
     tempo: 176,
     lead: 'E5 E5 D#5 E5 G5 - F#5 E5 D#5 - B4 - C5 D5 D#5 - E5 E5 D#5 E5 A5 - G5 F#5 G5 - E5 - D#5 - B4 - C5 C5 B4 C5 E5 - D5 C5 B4 - G4 - A4 B4 C5 - B4 C5 D5 D#5 E5 - - - B4 - - - - - - -',
@@ -180,15 +225,74 @@ let current: string | null = null;
 let timer: number | null = null;
 let musicBus: GainNode | null = null;
 
+// ── Música grabada (CC0, ver public/music/CREDITOS.txt); si no carga, suena la sintetizada ──
+const TRACKS: Record<string, string> = {
+  titulo: 'titulo', mapa: 'mapa',
+  pradera: 'aventura1', bosque: 'etapa1', desierto: 'aventura2', mar: 'etapa2', nieve: 'etapa1',
+  cueva: 'etapa2', cielo: 'aventura2', castillo: 'aventura3', carro: 'aventura3', torre: 'aventura1',
+  jefe: 'jefe', final: 'jefe', victoria: 'final',
+};
+let track: HTMLAudioElement | null = null;
+const broken = new Set<string>();
+let waiting: (() => void) | null = null;
+
+function stopTrack() {
+  if (track) {
+    track.pause();
+    track.src = '';
+    track = null;
+  }
+  if (waiting) {
+    removeEventListener('keydown', waiting, true);
+    removeEventListener('pointerdown', waiting, true);
+    waiting = null;
+  }
+}
+
+/** Intenta sonar el tema grabado. Devuelve false si no hay o falló antes. */
+function playTrack(name: string): boolean {
+  const file = TRACKS[name];
+  if (!file || broken.has(file) || typeof Audio === 'undefined') return false;
+  const el = new Audio(import.meta.env.BASE_URL + 'music/' + file + '.mp3');
+  el.loop = name !== 'victoria';
+  el.volume = 0.45;
+  el.addEventListener('error', () => {
+    broken.add(file);
+    if (track === el && current === name) {
+      track = null;
+      playMusic(name, true);
+    }
+  });
+  track = el;
+  el.play().catch(() => {
+    // El navegador no deja sonar nada hasta que se pulsa una tecla: se reintenta entonces
+    if (track !== el) return;
+    waiting = () => {
+      stopWaiting();
+      if (track === el) void el.play().catch(() => {});
+    };
+    const stopWaiting = () => {
+      if (!waiting) return;
+      removeEventListener('keydown', waiting, true);
+      removeEventListener('pointerdown', waiting, true);
+      waiting = null;
+    };
+    addEventListener('keydown', waiting, true);
+    addEventListener('pointerdown', waiting, true);
+  });
+  return true;
+}
+
 export function playMusic(name: string, force = false) {
-  if (current === name && !force && timer !== null) return;
+  if (current === name && !force && (timer !== null || track)) return;
   current = name;
   stopTimer();
+  stopTrack();
   if (!musicOn) return;
+  if (playTrack(name)) return;
   const a = ac();
   if (!a || !master) return;
-  const song = SONGS[name];
-  if (!song) return;
+  const song = SONGS[name] ?? SONGS.mapa;
   musicBus = a.createGain();
   musicBus.gain.value = 1;
   musicBus.connect(master);
@@ -235,4 +339,5 @@ function stopTimer() {
 
 export function stopMusic() {
   stopTimer();
+  stopTrack();
 }
